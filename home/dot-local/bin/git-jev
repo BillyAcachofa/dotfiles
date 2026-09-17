@@ -18,8 +18,9 @@
   --yes            skip the confirmation prompt
 
 Branch and commit arguments are chosen from what is actually in the repo, so
-it cannot invent a branch that does not exist. Anything that writes asks
-first. Set GIT_JEV_UNSURE=0.6 to have shaky readings ask first too.
+it cannot invent a branch that does not exist. Nothing asks before running:
+set GIT_JEV_CONFIRM=1 to confirm writes and low-confidence readings, and
+GIT_JEV_TIMING=1 to report how long each half took.
 Needs TYPESAFE_API_KEY: environment, then ~/.config/fresh/env, then ~/jev/.env.
 """
 
@@ -29,6 +30,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -46,6 +48,10 @@ WRITES = {"switch", "branch", "pull", "push"}
 # Confirmations are off: they get in the way of a demo. Set GIT_JEV_CONFIRM=1
 # to put them back, for writes and for shaky readings both.
 CONFIRM = bool(os.environ.get("GIT_JEV_CONFIRM"))
+
+# Report how long the words took to become a command, and the command to
+# return. Set GIT_JEV_TIMING=1.
+TIMING = bool(os.environ.get("GIT_JEV_TIMING"))
 
 # Below this, the weakest judgement behind the command is too shaky to act on
 # unasked, even for a command that only reports. Only applied when confirming.
@@ -335,11 +341,15 @@ def main(argv: list[str] | None = None) -> int:
 
     from typesafe_sdk import TypeSafeClient
 
+    started = time.perf_counter()
     try:
         r = resolve(request, TypeSafeClient(timeout=30.0))
     except Exception as exc:  # noqa: BLE001 - surface whatever the SDK raises
         print(f"git-jev: could not work out what you meant: {exc}", file=sys.stderr)
         return 1
+    # Includes the few local git calls that gather the candidate branches and
+    # commits, since those are part of turning the words into a command.
+    resolved_in = time.perf_counter() - started
 
     print(f'{DIM}heard:{RESET} "{r.request}"')
     if not r.argv:
@@ -354,6 +364,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     for note in r.notes:
         print(f"  {YELLOW}note{RESET} {note}")
+    if TIMING:
+        print(f"  {DIM}resolve {resolved_in:.2f}s{RESET}")
     print()
 
     if explain:
@@ -373,7 +385,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         print()
 
-    return subprocess.run(["git", *r.argv]).returncode
+    # The child writes straight to the terminal, so anything still sitting in
+    # our own buffer would land after it once stdout is a pipe rather than a tty.
+    sys.stdout.flush()
+    started = time.perf_counter()
+    result = subprocess.run(["git", *r.argv])
+    if TIMING:
+        print(f"{DIM}run {time.perf_counter() - started:.2f}s{RESET}")
+    return result.returncode
 
 
 if __name__ == "__main__":
