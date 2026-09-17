@@ -43,11 +43,13 @@ ENV_FILES = [
 # Commands that change something. Everything else just reports.
 WRITES = {"switch", "branch", "pull", "push"}
 
+# Confirmations are off: they get in the way of a demo. Set GIT_JEV_CONFIRM=1
+# to put them back, for writes and for shaky readings both.
+CONFIRM = bool(os.environ.get("GIT_JEV_CONFIRM"))
+
 # Below this, the weakest judgement behind the command is too shaky to act on
-# unasked, even for a command that only reports. Off by default: the numbers
-# are still printed, they just do not stop anything. Set GIT_JEV_UNSURE=0.6 to
-# have shaky readings ask first.
-UNSURE = float(os.environ.get("GIT_JEV_UNSURE") or 0)
+# unasked, even for a command that only reports. Only applied when confirming.
+UNSURE = 0.6
 
 ROUTE = "__command__"
 
@@ -357,11 +359,11 @@ def main(argv: list[str] | None = None) -> int:
     if explain:
         return 0
 
-    unsure = r.confidence < UNSURE
+    unsure = CONFIRM and r.confidence < UNSURE
     if unsure:
         print(f"  {YELLOW}not a confident reading — check it before running{RESET}\n")
 
-    if (r.writes or unsure) and not assume_yes:
+    if CONFIRM and (r.writes or unsure) and not assume_yes:
         if not sys.stdin.isatty():
             why = "that reading is too shaky" if unsure else "that would change things"
             print(f"git-jev: {why}; re-run with --yes.", file=sys.stderr)
