@@ -19,7 +19,7 @@
 
 Branch and commit arguments are chosen from what is actually in the repo, so
 it cannot invent a branch that does not exist. Anything that writes asks
-first, and so does anything it is not confident it read correctly.
+first. Set GIT_JEV_UNSURE=0.6 to have shaky readings ask first too.
 Needs TYPESAFE_API_KEY: environment, then ~/.config/fresh/env, then ~/jev/.env.
 """
 
@@ -44,8 +44,10 @@ ENV_FILES = [
 WRITES = {"switch", "branch", "pull", "push"}
 
 # Below this, the weakest judgement behind the command is too shaky to act on
-# unasked, even for a command that only reports.
-UNSURE = 0.6
+# unasked, even for a command that only reports. Off by default: the numbers
+# are still printed, they just do not stop anything. Set GIT_JEV_UNSURE=0.6 to
+# have shaky readings ask first.
+UNSURE = float(os.environ.get("GIT_JEV_UNSURE") or 0)
 
 ROUTE = "__command__"
 
