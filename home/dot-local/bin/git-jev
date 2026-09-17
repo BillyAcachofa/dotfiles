@@ -1,0 +1,376 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["typesafe-sdk>=0.6.0"]
+# ///
+"""Run git by describing what you want. Installed as git-jev, so: git jev ...
+
+  git jev what's going on                  -> git status -sb
+  git jev what have I changed              -> git diff
+  git jev show me the diff of what's staged -> git diff --staged
+  git jev show me the last few commits     -> git log --oneline -20
+  git jev go back to the auth work         -> git switch feature/auth
+  git jev start a branch for the login fix -> git switch -c login-fix
+  git jev get the latest                   -> git pull --ff-only
+  git jev send it up                       -> git push
+
+  -n / --explain   work out the command, print it, run nothing
+  --yes            skip the confirmation prompt
+
+Branch and commit arguments are chosen from what is actually in the repo, so
+it cannot invent a branch that does not exist. Anything that writes asks
+first, and so does anything it is not confident it read correctly.
+Needs TYPESAFE_API_KEY: environment, then ~/.config/fresh/env, then ~/jev/.env.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+BOLD, DIM, YELLOW, RESET = "\033[1m", "\033[2m", "\033[33m", "\033[0m"
+
+ENV_FILES = [
+    Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "fresh" / "env",
+    Path.home() / "jev" / ".env",
+]
+
+# Commands that change something. Everything else just reports.
+WRITES = {"switch", "branch", "pull", "push"}
+
+# Below this, the weakest judgement behind the command is too shaky to act on
+# unasked, even for a command that only reports.
+UNSURE = 0.6
+
+ROUTE = "__command__"
+
+
+def load_env() -> bool:
+    if os.environ.get("TYPESAFE_API_KEY"):
+        return True
+    for path in ENV_FILES:
+        if not path.is_file():
+            continue
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+        if os.environ.get("TYPESAFE_API_KEY"):
+            return True
+    return False
+
+
+def git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", *args], capture_output=True, text=True)
+
+
+def out(*args: str) -> str:
+    result = git(*args)
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+# ------------------------------------------------------- what is in this repo
+
+
+def local_branches() -> dict[str, str]:
+    """Branch name -> its last commit subject, so a request can be matched on
+    what the branch is about rather than only on its name.
+    """
+    listing = out(
+        "for-each-ref",
+        "--sort=-committerdate",
+        "--format=%(refname:short)\t%(contents:subject)",
+        "refs/heads/",
+    )
+    branches = {}
+    for line in listing.splitlines():
+        name, _, subject = line.partition("\t")
+        if name:
+            branches[name] = f"last commit on it: {subject}" if subject else "no commits"
+    return branches
+
+
+def recent_commits(limit: int = 12) -> dict[str, str]:
+    commits = {}
+    for line in out("log", f"-{limit}", "--format=%h\t%s").splitlines():
+        sha, _, subject = line.partition("\t")
+        if sha:
+            commits[sha] = subject
+    return commits
+
+
+def current_branch() -> str:
+    return out("symbolic-ref", "--quiet", "--short", "HEAD") or "(detached)"
+
+
+def has_upstream() -> bool:
+    return git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").returncode == 0
+
+
+STOPWORDS = {
+    "a", "an", "and", "branch", "called", "create", "cut", "for", "from", "get",
+    "git", "make", "me", "my", "name", "named", "new", "of", "off", "on", "please",
+    "start", "the", "to", "up", "work", "working",
+}
+
+
+def slugify(request: str) -> str:
+    """Build the branch name in code rather than asking a model to invent one."""
+    kept = [w for w in re.findall(r"[a-z0-9]+", request.lower()) if w not in STOPWORDS]
+    return "-".join(kept)[:60] or "new-branch"
+
+
+# -------------------------------------------------------------- the questions
+
+
+def build_questions(branches: dict[str, str], commits: dict[str, str]) -> dict[str, Any]:
+    from typesafe_sdk import Choice, Noul
+
+    questions: dict[str, Any] = {
+        ROUTE: Choice(
+            instructions="What is the user asking git to do?",
+            criteria={
+                "status": "name which files are affected and what state each is in "
+                "— modified, staged, untracked — and how this branch sits against "
+                "its remote. A stocktake by file, not the content of any change. "
+                "Asking where things stand, or whether anything is outstanding.",
+                "diff": "show the content of the changes themselves, the actual "
+                "lines added and removed. Asking what was changed, what is in a "
+                "change, or to be shown a change rather than told which files it "
+                "touched.",
+                "log": "list recent commits, the history of what has been done",
+                "show": "show one particular past commit in full, what it changed",
+                "switch": "move onto a different branch that already exists",
+                "branch": "start a brand new branch that does not exist yet",
+                "pull": "bring down work from the remote into this branch",
+                "push": "send this branch's commits up to the remote",
+                "fetch": "update knowledge of what is on the remote without "
+                "changing any local files",
+            },
+        ),
+        "diff.staged": Noul(
+            instructions=(
+                "Does the user mean the changes they have already marked for the "
+                "next commit, rather than everything they have edited?"
+            ),
+            criteria={
+                "true": "Asking about what is staged, added, or ready to commit.",
+                "false": "Asking about their changes generally, or about what they "
+                "have edited or touched.",
+            },
+        ),
+        "fetch.prune": Noul(
+            instructions=(
+                "Does the user want references to remote branches that no longer "
+                "exist cleared away too?"
+            ),
+            criteria={
+                "true": "Mentioning tidying, pruning or clearing out stale or dead "
+                "remote branches.",
+                "false": "Just asking to check the remote.",
+            },
+        ),
+        "log.mine": Noul(
+            instructions="Does the user want only their own commits, not everyone's?",
+            criteria={
+                "true": "Saying mine, my commits, what I have done.",
+                "false": "Asking about the history generally.",
+            },
+        ),
+    }
+    if branches:
+        questions["switch.branch"] = Choice(
+            instructions=(
+                "Which existing branch does the user want to be on? Match on what "
+                "the branch is about, not only on its name."
+            ),
+            criteria=branches,
+        )
+    if commits:
+        questions["show.commit"] = Choice(
+            instructions="Which past commit does the user mean?", criteria=commits
+        )
+    return questions
+
+
+@dataclass
+class Resolution:
+    request: str
+    command: str
+    argv: list[str]
+    confidence: float
+    route_probability: float
+    notes: list[str]
+
+    @property
+    def writes(self) -> bool:
+        return self.command in WRITES
+
+
+def resolve(request: str, client: Any) -> Resolution:
+    from typesafe_sdk import ChoiceAnswer, NoulAnswer
+
+    here = current_branch()
+    # The branch you are already on is not somewhere to switch to.
+    switchable = {b: d for b, d in local_branches().items() if b != here}
+    questions = build_questions(switchable, recent_commits())
+
+    response = client.system_one(
+        state={
+            "request": request,
+            "current_branch": here,
+            "has_uncommitted_changes": bool(out("status", "--porcelain")),
+        },
+        questions=questions,
+    )
+
+    route = response.answers[ROUTE]
+    assert isinstance(route, ChoiceAnswer)
+    command = route.choice
+    certainties = [route.confidence]
+    notes: list[str] = []
+    argv: list[str] = []
+
+    def noul(key: str) -> bool:
+        answer = response.answers[key]
+        assert isinstance(answer, NoulAnswer)
+        certainties.append(max(answer.noul, 1.0 - answer.noul))
+        return answer.noul > 0.5
+
+    def chosen(key: str) -> str:
+        answer = response.answers[key]
+        assert isinstance(answer, ChoiceAnswer)
+        certainties.append(answer.confidence)
+        return answer.choice
+
+    if command == "status":
+        argv = ["status", "-sb"]
+    elif command == "diff":
+        argv = ["diff", "--staged"] if noul("diff.staged") else ["diff"]
+    elif command == "log":
+        argv = ["log", "--oneline", "-20"]
+        if noul("log.mine") and (email := out("config", "user.email")):
+            argv.append(f"--author={email}")
+    elif command == "show":
+        if "show.commit" in questions:
+            argv = ["show", "--stat", chosen("show.commit")]
+        else:
+            argv, notes = ["show", "--stat"], ["no commits to choose from"]
+    elif command == "switch":
+        if "switch.branch" in questions:
+            argv = ["switch", chosen("switch.branch")]
+        else:
+            notes.append(f"no other local branch to switch to (you are on {here})")
+    elif command == "branch":
+        argv = ["switch", "-c", slugify(request)]
+    elif command == "pull":
+        # Fast-forward only, so it never invents a merge commit nobody asked for.
+        argv = ["pull", "--ff-only"]
+    elif command == "push":
+        if has_upstream():
+            argv = ["push"]
+        else:
+            argv = ["push", "-u", "origin", here]
+            notes.append(f"no upstream yet, so this sets one: origin/{here}")
+    elif command == "fetch":
+        argv = ["fetch", "--prune"] if noul("fetch.prune") else ["fetch"]
+
+    return Resolution(
+        request=request,
+        command=command,
+        argv=argv,
+        confidence=min(certainties),
+        route_probability=route.probabilities.get(command, 0.0),
+        notes=notes,
+    )
+
+
+# -------------------------------------------------------------------- the CLI
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    explain = assume_yes = False
+    words = []
+    for a in args:
+        if a in ("-n", "--explain"):
+            explain = True
+        elif a == "--yes":
+            assume_yes = True
+        elif a in ("-h", "--help"):
+            print(__doc__.strip())
+            return 0
+        elif a.startswith("-"):
+            print(f"git-jev: unknown flag: {a}", file=sys.stderr)
+            return 1
+        else:
+            words.append(a)
+
+    request = " ".join(words).strip()
+    if not request:
+        print(__doc__.strip())
+        return 0
+
+    if git("rev-parse", "--git-dir").returncode != 0:
+        print("git-jev: not a git repository", file=sys.stderr)
+        return 1
+
+    if not load_env():
+        print(
+            f"git-jev: no TYPESAFE_API_KEY. Put it in the environment, "
+            f"{ENV_FILES[0]}, or {ENV_FILES[1]}.",
+            file=sys.stderr,
+        )
+        return 1
+
+    from typesafe_sdk import TypeSafeClient
+
+    try:
+        r = resolve(request, TypeSafeClient(timeout=30.0))
+    except Exception as exc:  # noqa: BLE001 - surface whatever the SDK raises
+        print(f"git-jev: could not work out what you meant: {exc}", file=sys.stderr)
+        return 1
+
+    print(f'{DIM}heard:{RESET} "{r.request}"')
+    if not r.argv:
+        print(f"  {YELLOW}nothing to run{RESET}")
+        for note in r.notes:
+            print(f"  {YELLOW}note{RESET} {note}")
+        return 1
+
+    print(
+        f"  {BOLD}git {' '.join(r.argv)}{RESET}"
+        f"   {DIM}confidence {r.confidence:.2f}  command {r.route_probability:.2f}{RESET}"
+    )
+    for note in r.notes:
+        print(f"  {YELLOW}note{RESET} {note}")
+    print()
+
+    if explain:
+        return 0
+
+    unsure = r.confidence < UNSURE
+    if unsure:
+        print(f"  {YELLOW}not a confident reading — check it before running{RESET}\n")
+
+    if (r.writes or unsure) and not assume_yes:
+        if not sys.stdin.isatty():
+            why = "that reading is too shaky" if unsure else "that would change things"
+            print(f"git-jev: {why}; re-run with --yes.", file=sys.stderr)
+            return 1
+        if input("run this? [y/N] ").strip().lower() not in ("y", "yes"):
+            print("nothing done")
+            return 0
+        print()
+
+    return subprocess.run(["git", *r.argv]).returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
