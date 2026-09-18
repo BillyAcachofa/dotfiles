@@ -136,3 +136,6 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 
 # Disable the AWS CLI pager
 export AWS_PAGER=""
+
+# Go-installed binaries (sops, etc.)
+export PATH="$HOME/go/bin:$PATH"
