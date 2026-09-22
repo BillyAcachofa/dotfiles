@@ -227,7 +227,7 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 vim.api.nvim_create_autocmd('FileType', {
   desc = 'Set 2 space indentation for TS/JS files',
   group = vim.api.nvim_create_augroup('ts-js-indent', { clear = true }),
-  pattern = { 'typescript', 'typescriptreact', 'javascript', 'javascriptreact', 'json' },
+  pattern = { 'typescript', 'typescriptreact', 'javascript', 'javascriptreact', 'json', 'jsonc' },
   callback = function()
     vim.bo.expandtab = true -- Use spaces instead of tabs
     vim.bo.shiftwidth = 2 -- Indent width for >> and <<
@@ -291,7 +291,13 @@ require 'custom.extras.run-current-test'
 -- NOTE: Here is where you install your plugins.
 require('lazy').setup({
   -- NOTE: Plugins can be added with a link (or for a github repo: 'owner/repo' link).
-  { 'NMAC427/guess-indent.nvim', opts = {} }, -- Detect tabstop and shiftwidth automatically
+  {
+    'NMAC427/guess-indent.nvim',
+    -- guess-indent runs on BufReadPost, after the FileType autocmd above, so
+    -- without this it re-guesses JSON indentation from whatever the file
+    -- already contains and undoes the 2-space setting.
+    opts = { filetype_exclude = { 'netrw', 'tutor', 'json', 'jsonc' } },
+  }, -- Detect tabstop and shiftwidth automatically
 
   -- NOTE: Plugins can also be added by using a table,
   -- with the first argument being the link and the following
@@ -820,7 +826,7 @@ require('lazy').setup({
     },
     opts = {
       timeout_ms = 3000,
-      notify_on_error = false,
+      notify_on_error = true,
       format_after_save = function(bufnr)
         -- Disable "format_on_save lsp_fallback" for languages that don't
         -- have a well standardized coding style. You can add additional
@@ -847,6 +853,7 @@ require('lazy').setup({
         markdown = { 'prettierd' },
         javascript = { 'biome' },
         json = { 'biome' },
+        jsonc = { 'biome' },
         typescript = { 'biome' },
         typescriptreact = { 'biome' },
       },
@@ -856,7 +863,6 @@ require('lazy').setup({
             'format',
             '--indent-style=space',
             '--indent-width=2',
-            '--format-with-errors=true',
             '--stdin-file-path',
             '$FILENAME',
           },
