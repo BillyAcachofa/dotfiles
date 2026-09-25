@@ -13,7 +13,7 @@
       "Bash(python3 *)"
     ]
   },
-  "model": "sonnet",
+  "model": "opus",
   "hooks": {
     "UserPromptSubmit": [
       {

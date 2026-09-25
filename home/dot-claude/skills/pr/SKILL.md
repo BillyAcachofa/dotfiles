@@ -76,11 +76,28 @@ here. The last line of the body is the last bullet. Before running
 A groundwork PR:
 
 ```
-_Description to follow._
+* adds a function to get version history
+* not yet plugged in so no functional change
 ```
 
-The author rewrites every PR description themselves, so a drafted one is wasted effort. Do not summarise the change, explain the why, list commits, call out blast radius, or reference related PRs in the body — none of it. Just the placeholder. Put all your effort into the **title** instead (it's the only part that ships as-is).
+A user-facing PR:
 
-If context genuinely needs to reach the author (e.g. "this depends on #123"), it goes in your report back to the caller, not in the PR body.
+```
+* adds a read-only view of an earlier version, with buttons to return to the current one or restore it
+* restore asks for confirmation, and names any screening algorithm that no longer exists and cannot be brought back
+* connects the whole feature to real data
+```
 
-**Never flag or caveat the placeholder in your report back.** Leaving the body as `_Description to follow._` is the expected, correct outcome of this skill, not a gap or something skipped — do not mention it, apologize for it, or offer to write a real one. Report just the PR URL and title.
+Bad — references code, explains the why, too long:
+
+```
+* Adds `VersionHistoryPanel` in `-version-history-panel.tsx`
+* Refactors `listByInterviewProcess` to avoid pulling the `snapshot` jsonb column,
+  which matters because the drawer only needs metadata and the snapshots are large
+* Blast radius: the guide editor only
+* Tests: 36 passing
+```
+
+If something genuinely needs to reach the author beyond this — a dependency on
+another PR, a decision they need to make — it goes in your report back to the
+caller, not in the PR body.

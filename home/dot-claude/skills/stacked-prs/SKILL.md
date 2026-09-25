@@ -78,8 +78,8 @@ confirm this in seconds if you suspect it.
 
 - `commit-style` for every commit.
 - `pr` for title/description conventions — note that `gh stack submit --auto`
-  seeds PR bodies from the commit message, which then need replacing with the
-  `pr` skill's placeholder body by hand.
+  seeds PR bodies from the commit message, which then need replacing with a
+  proper description per the `pr` skill by hand.
 
 ## If something doesn't work the way you expect
 

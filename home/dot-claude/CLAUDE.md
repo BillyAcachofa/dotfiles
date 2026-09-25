@@ -21,13 +21,14 @@
 - please use 'docker compose' instead of docker-compose
 - Worktrees are isolated environments for separate tasks. Never use resources (databases, containers, ports) from one worktree in another. Only use the DB/services running for the current checkout.
 - When agents need to run git commands in a directory that is NOT their current working directory, use `git -C /path` instead of `cd /path && git`. This avoids requiring user approval for every `cd` command. If the repo is already the working directory, just run `git` directly.
+- **Don't run the full test suite locally before pushing.** Run the tests for the code you changed, plus typecheck and lint, then push and let CI run the full suite. Never hold up a push or PR waiting on a full local run. If a local run fails in files you didn't touch, treat it as environmental and move on rather than re-running to prove it. Only run the full suite locally when asked or when CI fails in a way that points at your change.
 
 ## Version control
 
 - **Before writing any code**, check you are on an appropriate branch. If you need a new branch, create it from main (or the correct base) first. Never make changes on an unrelated branch.
 - Always follow the `commit-style` skill when creating git commits.
 - Always use the `pr` skill when creating pull requests.
-- **Never amend commits.** Always add new commits. Preserving individual commit history is preferred over a clean single commit. Force push should only be used for rebasing.
+- **Never rewrite shared history.** Once a commit has been pushed, add new commits rather than amending it. Amending or rewording local, unpushed commits is fine. Preserving individual commit history is preferred over a clean single commit. Force push should only be used for rebasing.
 - If you encounter SSH permission errors when accessing GitHub (e.g. `git@github.com: Permission denied (publickey)`), stop immediately and ask the user to add the SSH key. You cannot do this yourself — it requires a password you don't have access to.
 - When creating git worktrees, always use flat directory names — no slashes. Flatten branch names with dashes, e.g. `../repo_worktree_feature_branch-name` not `../repo_worktree_feature/branch-name`.
 
@@ -48,6 +49,6 @@
 - When you need to push a branch or open a PR, always delegate to the `gitops` agent. Pass it the worktree path, branch name, and desired action.
 - **You MUST NOT create a PR without using the `pr` skill, and the `gitops` agent must follow the `commit-style` skill for any commits.** Both skills are declared in the gitops agent's frontmatter, so it can invoke them itself — do not paste the skill files into the prompt. Just remind gitops in the delegation prompt that the `pr` and `commit-style` skills apply, and never invent your own PR title/body or commit message format.
 - The `gitops` agent will review commit quality before pushing and will reject branches with poor commit messages.
-- **Before opening a PR against main**, the gitops agent must check that the branch is reasonably up to date with `origin/main` (fetch and compare). If there are significant commits on main that aren't in the branch, reject and ask for a rebase before proceeding.
+- **Before opening a PR against main**, the gitops agent must fetch `origin/main` and check whether the branch conflicts with it. Being behind main is fine on its own and not worth mentioning; only reject and ask for a rebase if there are conflicts.
 - **When pushing further changes to an existing PR**, the gitops agent (or orchestrator) must review the PR description and update it if anything is now stale or inaccurate. Rebases, resolved conflicts, and merged dependencies can all invalidate earlier descriptions.
 
