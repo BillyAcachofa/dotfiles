@@ -17,7 +17,7 @@ after-startup-command = ['exec-and-forget borders']
 
 # In config-version 2 this is no longer inferred from bindings, so declare the
 # workspaces that should stay alive when empty (keeps monitor assignments stable)
-persistent-workspaces = ['1', '2', '3', '4', '5', '6', '7', '8', 'C', 'M', 'N']
+persistent-workspaces = ['1', '2', '3', '4', '5', '6', '7', '8', 'C', 'G', 'M', 'N']
 
 # Normalize the tree so closing/opening windows doesn't leave odd nesting
 enable-normalization-flatten-containers = true
@@ -80,6 +80,12 @@ run = 'move-node-to-workspace 7'
 if.app-id = 'app.zen-browser.zen'
 run = 'move-node-to-workspace 8'
 
+# MRM (pull request reviews) gets G. Only the installed app: the dev build
+# (dev.salkeld.mrm.dev) opens wherever it's launched from.
+[[on-window-detected]]
+if.app-id = 'dev.salkeld.mrm'
+run = 'move-node-to-workspace G'
+
 # All Teams windows -> the calls workspace C (built-in screen). Manage layout
 # there as needed (Ctrl+Opt+F fullscreen, Ctrl+Opt+/ accordion).
 [[on-window-detected]]
@@ -101,6 +107,7 @@ C = 'built-in'       # Teams calls
 6 = 'Acer R270U'     # Claude
 7 = 'Acer R270U'     # NetNewsWire
 8 = 'Acer R270U'     # Zen
+G = 'Acer R270U'     # MRM
 # A scratch workspace pinned to each monitor
 M = 'Acer R270U'     # external scratch
 N = 'built-in'       # laptop scratch
@@ -119,6 +126,9 @@ ctrl-alt-8 = ['workspace 8', 'exec-and-forget open -a "Zen"']
 
 # Teams calls workspace (laptop screen)
 ctrl-alt-c = 'workspace C'
+
+# MRM, by bundle id so it opens the installed app and never MRM Dev
+ctrl-alt-g = ['workspace G', 'exec-and-forget open -b dev.salkeld.mrm']
 
 # Scratch workspace per monitor. External screen is on the left, so 9 (left of 0)
 # = external scratch (M), 0 = laptop scratch (N).
@@ -146,6 +156,7 @@ ctrl-alt-shift-6 = ['move-node-to-workspace 6', 'workspace 6']
 ctrl-alt-shift-7 = ['move-node-to-workspace 7', 'workspace 7']
 ctrl-alt-shift-8 = ['move-node-to-workspace 8', 'workspace 8']
 ctrl-alt-shift-c = ['move-node-to-workspace C', 'workspace C']
+ctrl-alt-shift-g = ['move-node-to-workspace G', 'workspace G']
 ctrl-alt-shift-9 = ['move-node-to-workspace M', 'workspace M']
 ctrl-alt-shift-0 = ['move-node-to-workspace N', 'workspace N']
 
@@ -194,8 +205,8 @@ ctrl-alt-comma = 'layout horizontal vertical'
 ctrl-alt-minus = 'resize smart -50'
 ctrl-alt-equal = 'resize smart +50'
 
-# Jump to a specific app wherever it is (any workspace); launch if not running
-ctrl-alt-g = 'exec-and-forget /Users/edsalkeld/.local/bin/aerospace-app com.mitchellh.ghostty Ghostty'
+# Jump to a specific app wherever it is (any workspace); launch if not running.
+# Ghostty has none: ctrl-alt-g went to MRM, and ctrl-alt-1 already does this.
 ctrl-alt-s = 'exec-and-forget /Users/edsalkeld/.local/bin/aerospace-app com.tinyspeck.slackmacgap Slack'
 ctrl-alt-o = 'exec-and-forget /Users/edsalkeld/.local/bin/aerospace-app com.microsoft.Outlook "Microsoft Outlook"'
 ctrl-alt-l = 'exec-and-forget /Users/edsalkeld/.local/bin/aerospace-app com.linear Linear'
