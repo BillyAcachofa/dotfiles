@@ -1,0 +1,23 @@
+#!/bin/bash
+# Clear the 1Password browser-helper so a Munki (Managed Software Center) update
+# can install. Munki treats the helper as a blocking application and silently
+# skips the update while it runs — the GUI just spins and returns.
+#
+# We bootout the launchd job rather than kill the pid: the helper is a KeepAlive
+# background item, so plain kill is instantly respawned by launchd. bootout is
+# session-only, so run this then click Update straight away, before a browser or
+# 1Password relaunches it.
+
+set -euo pipefail
+
+label="2BUA8C4S2C.com.1password.browser-helper"
+
+launchctl bootout "gui/$(id -u)/${label}" 2>/dev/null || true
+sleep 1
+
+if pgrep -f "$label" >/dev/null 2>&1; then
+	echo "1Password helper is still running — try again, or fully quit 1Password/browsers first." >&2
+	exit 1
+fi
+
+echo "1Password helper cleared — hit Update in Managed Software Center now."
