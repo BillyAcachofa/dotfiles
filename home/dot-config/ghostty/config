@@ -47,7 +47,9 @@
 #theme = catppuccin-latte
 theme = light:Modus Operandi Tinted,dark:Modus Vivendi Tinted
 #font-family = Ubuntu Mono
-font-family = Monaspace Argon Regular
+#font-family = Monaspace Argon Regular
+# Iosevka Fixed spacing: strictly monospaced, no ligatures
+font-family = Iosevka Fixed
 font-size = 14
 
 # Allow OSC52 clipboard writes (so tmux yanks from the sbx box reach the clipboard)

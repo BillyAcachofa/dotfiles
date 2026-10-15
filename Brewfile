@@ -101,6 +101,7 @@ brew "watch"
 cask "1password-cli"
 # i3-like tiling window manager for macOS
 cask "aerospace"
+cask "font-iosevka"
 cask "font-monaspace"
 cask "font-ubuntu-mono"
 # Set of tools to manage resources and applications hosted on Google Cloud
