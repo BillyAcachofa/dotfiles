@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Runs on every gvm apply: a rebuilt box gets work-brain back.
+set -euo pipefail
+
+dir="$HOME/personal/work-brain"
+if [ -d "$dir/.git" ]; then
+	# Local edits or divergence shouldn't block gvm up; leave them for a person.
+	git -C "$dir" pull --ff-only -q || echo "work-brain: pull failed, left as is" >&2
+else
+	mkdir -p "$(dirname "$dir")"
+	git clone -q https://github.com/EdwardSalkeld/work-brain.git "$dir"
+fi

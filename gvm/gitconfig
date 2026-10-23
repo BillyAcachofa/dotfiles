@@ -1,0 +1,9 @@
+# Box-only: git as Ed over https, authenticated by gh's GH_TOKEN.
+[user]
+	name = Ed Salkeld
+	email = edward.salkeld@brightnetwork.co.uk
+[credential "https://github.com"]
+	helper = !gh auth git-credential
+[url "https://github.com/"]
+	insteadOf = git@github.com:
+	insteadOf = ssh://git@github.com/
