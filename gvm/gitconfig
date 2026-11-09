@@ -7,3 +7,9 @@
 [url "https://github.com/"]
 	insteadOf = git@github.com:
 	insteadOf = ssh://git@github.com/
+# Personal repos use the second token: fine-grained PATs can't span owners.
+# Credential rules match a repo URL exactly, so each personal repo needs a section;
+# the empty helper drops the gh one inherited from the github.com rule.
+[credential "https://github.com/EdwardSalkeld/work-brain.git"]
+	helper =
+	helper = "!f() { test \"$1\" = get && printf 'username=x-access-token\\npassword=%s\\n' \"$GH_TOKEN_PERSONAL\"; }; f"
