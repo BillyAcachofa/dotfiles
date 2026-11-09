@@ -8,3 +8,10 @@
 ## Linux Setup
 - TBC
 
+### Audio device test
+
+After running `./up.sh`, use `~/.local/bin/find-audio-device.sh` to list ALSA
+playback devices and play a two-second test tone on each. It requires `aplay`
+and `speaker-test` from your distribution's `alsa-utils` package. Press Ctrl+C
+to stop the test.
+
