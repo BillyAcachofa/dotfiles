@@ -17,5 +17,5 @@ if ! tailscale status >/dev/null 2>&1; then
 		echo "tailscale: no auth key at $key, not joining" >&2
 		exit 0
 	fi
-	sudo tailscale up --auth-key="file:$key" --hostname=ai-gvm
+	sudo tailscale up --auth-key="file:$key" --hostname=cuckoo-gvm
 fi
